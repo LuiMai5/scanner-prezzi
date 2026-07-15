@@ -1,7 +1,5 @@
-const CACHE_NAME = 'scanner-prezzi-v1';
+const CACHE_NAME = 'scanner-prezzi-v2';
 const CORE_ASSETS = [
-  './',
-  './index.html',
   'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',
   'https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js'
 ];
@@ -27,6 +25,22 @@ self.addEventListener('activate', event => {
 self.addEventListener('fetch', event => {
   const req = event.request;
   if (req.method !== 'GET') return;
+
+  const isHtml = req.mode === 'navigate' || (req.headers.get('accept') || '').includes('text/html');
+  if (isHtml){
+    // Page shell: always try the network first so updates show up immediately.
+    // Falls back to the last cached copy only if there's no connection.
+    event.respondWith(
+      fetch(req).then(resp => {
+        const clone = resp.clone();
+        caches.open(CACHE_NAME).then(cache => cache.put(req, clone));
+        return resp;
+      }).catch(() => caches.match(req))
+    );
+    return;
+  }
+
+  // Libraries/fonts: serve from cache instantly, refresh in the background
   event.respondWith(handleFetch(req));
 });
 
@@ -40,7 +54,6 @@ async function handleFetch(req){
   }).catch(() => null);
 
   if (cached){
-    // Serve instantly from cache, refresh cache in the background
     networkFetch;
     return cached;
   }
